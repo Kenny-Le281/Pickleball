@@ -1,12 +1,18 @@
 import time
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
+import json
 
-# Priority-ordered list of desired time slots
-PRIORITY_SLOTS = [
-    #"21:00 - 22:00",  Priority 3 (9 PM)
-    "22:00 - 23:00",   # Priority 4 (10 PM)
-]
+def load_slots():
+    try:
+        with open("priority_slots.json", "r") as f:
+            return json.load(f).get("slots", [])
+    except Exception as e:
+        print(f"❌ Error loading priority slots: {e}")
+        return []
+
+PRIORITY_SLOTS = load_slots()
+
 
 RETRIES = 40
 
@@ -125,7 +131,7 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state="calvin.json")
+        context = browser.new_context(storage_state="sylvia.json")
         page = context.new_page()
 
         for attempt in range(RETRIES):
