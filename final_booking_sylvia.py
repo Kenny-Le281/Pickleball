@@ -20,7 +20,7 @@ def load_priority_slots():
     except Exception as e:
         print(f"❌ Could not load slots.json: {e}")
         return []
-
+    
 def get_target_slot(all_slots):
     """
     Decide which single slot to search for based on current hour.
@@ -34,9 +34,7 @@ def get_target_slot(all_slots):
         hour += 1
 
     mapping = {
-        18: "19:00 - 20:00",  # release at 6pm
         19: "20:00 - 21:00",  # release at 7pm
-        20: "21:00 - 22:00",  # release at 8pm
         21: "22:00 - 23:00"   # release at 9pm
     }
 
@@ -51,15 +49,6 @@ def get_target_slot(all_slots):
 
 def get_tomorrows_date_str():
     return (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-
-def wait_until_5pm():
-    now = datetime.now()
-    target = now.replace(hour=14, minute=27, second=0, microsecond=0)  # Adjust for real booking time
-    if now >= target:
-        return
-    delta = (target - now).total_seconds()
-    print(f"[WAIT] Sleeping {int(delta)} seconds until booking window...")
-    time.sleep(delta)
 
 def run_search(page, date_str):
     page.goto("https://loisirs.montreal.ca/IC3/#/U6510/search")
@@ -83,10 +72,11 @@ def run_search(page, date_str):
     date_input.fill(date_str)
     page.wait_for_timeout(2000)
 
-def try_find_slot(page, priority_slots, prefer_second=False):
+def try_find_slot(page, priority_slots, prefer_second=True):
     """
     prefer_second = False → Script A: select the FIRST occurrence immediately
     prefer_second = True  → Script B: select the SECOND occurrence immediately
+                           (only if 2+ total matches exist across pages)
     """
     print("[SCAN] Scanning for priority slots (with pagination)...")
     matched = 0  # number of matches found so far
@@ -196,22 +186,19 @@ def main():
         print("❌ No target slot for this run, exiting.")
         return
 
-
     date_str = get_tomorrows_date_str()
     assert date_str != datetime.today().strftime("%Y-%m-%d"), "❌ ERROR: Today's date is selected. Only tomorrow is allowed."
 
-    wait_until_5pm()
-
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state="tommy.json")
+        context = browser.new_context(storage_state="sylvia.json")
         page = context.new_page()
 
         for attempt in range(RETRIES):
             print(f"[{attempt+1}/{RETRIES}] Checking for time slots on {date_str}...")
             run_search(page, date_str)
 
-            found_slot = try_find_slot(page, priority_slots, prefer_second=False)  # Script A → first match
+            found_slot = try_find_slot(page, priority_slots, prefer_second=True)  # Script B → second match
             if found_slot:
                 print(f"🟢 Slot '{found_slot}' selected.")
                 page.wait_for_timeout(2000)
