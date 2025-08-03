@@ -33,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ Decode Google credentials from secret into credentials.json
+      # ✅ Decode Google credentials from base64 secret
       - name: Set up Google credentials
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 -d > credentials.json
