@@ -34,8 +34,8 @@ def get_target_slot(all_slots):
         hour += 1
 
     mapping = {
-        18: "19:00 - 20:00",  # release at 6pm
-        20: "21:00 - 22:00",  # release at 8pm
+        18: "20:00 - 21:00",  # run at 6pm → book 8–9pm
+        20: "22:00 - 23:00"   # run at 8pm → book 10–11pm
     }
 
     target = mapping.get(hour)
