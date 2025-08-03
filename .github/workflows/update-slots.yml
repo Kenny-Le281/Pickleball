@@ -24,19 +24,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # 👀 Debug step to confirm if cache is restored
-      - name: Show pip cache status
-        run: du -sh ~/.cache/pip || echo "No pip cache restored"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ Decode Google credentials from base64 secret
+      # ✅ Decode base64 secret into credentials.json
       - name: Set up Google credentials
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 -d > credentials.json
+          ls -lh credentials.json  # debug check
+          head -5 credentials.json # show first lines (without private key)
 
       - name: Run read_slots.py
         run: python read_slots.py
