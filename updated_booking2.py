@@ -4,8 +4,7 @@ from playwright.sync_api import sync_playwright
 
 # Priority-ordered list of desired time slots
 PRIORITY_SLOTS = [
-    "13:00 - 14:00",  # Priority 3 (9 PM)
-    # "22:00 - 23:00",  # Priority 4 (10 PM)
+    "20:00 - 21:00",  # Priority 3 (9 PM)
 ]
 
 RETRIES = 40
@@ -160,7 +159,7 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state="tommy.json")
+        context = browser.new_context(storage_state="sylvia.json")
         page = context.new_page()
 
         for attempt in range(RETRIES):
