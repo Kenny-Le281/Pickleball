@@ -3,6 +3,7 @@ name: Update Slots
 on:
   schedule:
     - cron: "0 20 * * *"   # runs at 4:00 PM Montreal
+  workflow_dispatch:
 
 jobs:
   update-slots:
