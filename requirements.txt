@@ -1,0 +1,7 @@
+playwright==1.46.0
+google-api-python-client==2.129.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+requests==2.32.3
+pytz==2024.2
