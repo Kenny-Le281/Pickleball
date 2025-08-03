@@ -1,0 +1,56 @@
+name: Pickleball Automation
+
+on:
+  schedule:
+    - cron: "0 20 * * *"   # 4 PM Montreal (EDT = UTC+4 → 20:00 UTC) run read_slots.py
+    - cron: "0 22 * * *"   # 6 PM Montreal → 22:00 UTC
+    - cron: "0 23 * * *"   # 7 PM Montreal → 23:00 UTC
+    - cron: "0 0 * * *"    # 8 PM Montreal → 00:00 UTC (next day)
+    - cron: "0 1 * * *"    # 9 PM Montreal → 01:00 UTC (next day)
+  workflow_dispatch:       # manual trigger if needed
+
+jobs:
+  update-slots:
+    if: github.event.schedule == '0 20 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run read_slots.py
+        run: python read_slots.py
+
+      - name: Commit updated slots.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add slots.json
+          git commit -m "Auto-update slots.json [$(date)]" || echo "No changes to commit"
+          git push
+
+  run-bookings:
+    if: github.event.schedule == '0 22 * * *' || github.event.schedule == '0 23 * * *' || github.event.schedule == '0 0 * * *' || github.event.schedule == '0 1 * * *'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run booking script
+        run: python ${{ matrix.script }}
