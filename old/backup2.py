@@ -1,10 +1,28 @@
+"""
+Automated Pickleball Court Reservation Script
+
+This script uses Playwright to automatically reserve Pickleball court time slots
+on the Montreal Loisirs website. It logs in using a stored browser session,
+filters for the Saint-Léonard location, and selects the user's preferred time slots
+based on a priority list.
+
+Key features:
+- Automatically waits until a configured reservation time (e.g. 5 PM)
+- Repeatedly scans for available time slots and books the second match
+- Supports retry logic and pagination through multiple result pages
+- Handles full reservation workflow: slot selection, user selection, and checkout
+
+Useful when multiple instances are running to reserve multiple courts without collision.
+"""
+
+
 import time
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 
 # Priority-ordered list of desired time slots
 PRIORITY_SLOTS = [
-    "21:00 - 22:00",  # Priority 3 (9 PM)
+    "23:00 - 24:00",  # Priority 3 (9 PM)
     # "22:00 - 23:00",  # Priority 4 (10 PM)
 ]
 
@@ -15,7 +33,7 @@ def get_tomorrows_date_str():
 
 def wait_until_5pm():
     now = datetime.now()
-    target = now.replace(hour=14, minute=27, second=0, microsecond=0)  # Adjust if needed
+    target = now.replace(hour=7, minute=27, second=0, microsecond=0)  # Adjust if needed
     if now >= target:
         return
     delta = (target - now).total_seconds()
@@ -32,13 +50,22 @@ def run_search(page, date_str):
 
     saint_leonard_checkbox = page.locator("input#u2000_chkValue11")
     saint_leonard_checkbox.wait_for(state="visible")
-    saint_leonard_checkbox.click()
+
+    # 🧼 Always uncheck first (only if already checked)
+    if saint_leonard_checkbox.is_checked():
+        saint_leonard_checkbox.uncheck()
+        page.wait_for_timeout(300)
+
+    # ✅ Then re-check fresh
+    saint_leonard_checkbox.check()
+
     page.locator("button#u2000_btnTreeSelectConfirm").click()
 
     date_input = page.locator("input[name='reserveDate']")
     date_input.fill("")
     date_input.fill(date_str)
     page.wait_for_timeout(2000)
+
 
 def try_find_slot(page, priority_slots):
     print("[SCAN] Scanning for priority slots...")
@@ -54,20 +81,41 @@ def try_find_slot(page, priority_slots):
 
     if quand_index is None:
         print("❌ 'Quand' column not found.")
-        return None  # No column to check
+        return None
 
-    rows = page.locator("div#searchResult tbody tr")
-    for priority, slot in enumerate(priority_slots, 1):
-        for i in range(rows.count()):
-            cell = rows.nth(i).locator(f"td:nth-child({quand_index})")
-            cell_text = cell.inner_text().strip()
-            if slot in cell_text:
-                print(f"✅ [P{priority}] Found target slot '{slot}' at row {i+1}")
-                plus_button = rows.nth(i).locator("button:has(i.fa-plus)")
-                plus_button.click()
-                return slot  # Return the slot that was successfully selected
-    print("⛔ No priority slots found.")
-    return None
+    while True:
+        rows = page.locator("div#searchResult tbody tr")
+
+        for priority, slot in enumerate(priority_slots, 1):
+            match_count = 0
+
+            for i in range(rows.count()):
+                cell = rows.nth(i).locator(f"td:nth-child({quand_index})")
+                cell_text = cell.inner_text().strip()
+                if slot in cell_text:
+                    match_count += 1
+                    if match_count == 1:
+                        print(f"⚠️ Skipping first match at row {i+1}")
+                        continue  # Skip the first one
+                    print(f"✅ [P{priority}] Found SECOND slot '{slot}' at row {i+1}")
+                    plus_button = rows.nth(i).locator("button:has(i.fa-plus)")
+                    plus_button.click()
+                    return slot
+
+
+        # 📌 NEW: Detect parent <li> with class "disabled"
+        next_li = page.locator("li.pagination-next")
+        if next_li.count() > 0 and "disabled" in next_li.first.get_attribute("class"):
+            print("⛔ Last page reached. Ending scan.")
+            return None
+
+        # 🔁 Otherwise, click next page
+        print("➡️ Clicking next page...")
+        next_li.locator("a").click()
+        page.wait_for_timeout(1500)
+
+
+
 
 def select_user_and_confirm(page):
     print("[STEP] Selecting user...")
