@@ -6,7 +6,7 @@ on:
     - cron: "59 21 * * *"   # 5:59 PM Montreal
     - cron: "59 22 * * *"   # 6:59 PM Montreal
     - cron: "59 23 * * *"   # 7:59 PM Montreal
-  workflow_dispatch:         # 👈 adds manual trigger option
+  workflow_dispatch:         # 👈 manual trigger option
 
 jobs:
   run-bookings:
@@ -16,9 +16,25 @@ jobs:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - run: pip install -r requirements.txt
-      - run: playwright install --with-deps chromium   # 👈 ensure browsers are installed
-      - run: python ${{ matrix.script }}
+
+      # ✅ Cache pip dependencies
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright Browsers
+        run: playwright install --with-deps chromium
+
+      - name: Run booking script
+        run: python ${{ matrix.script }}
