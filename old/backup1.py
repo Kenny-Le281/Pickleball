@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 
 # Priority-ordered list of desired time slots
 PRIORITY_SLOTS = [
-    "21:00 - 22:00",  # Priority 3 (9 PM)
+    "23:00 - 23:00",  # Priority 3 (9 PM)
     # "22:00 - 23:00",  # Priority 4 (10 PM)
 ]
 

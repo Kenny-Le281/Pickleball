@@ -1,18 +1,12 @@
 import time
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
-import json
 
-def load_slots():
-    try:
-        with open("priority_slots.json", "r") as f:
-            return json.load(f).get("slots", [])
-    except Exception as e:
-        print(f"❌ Error loading priority slots: {e}")
-        return []
-
-PRIORITY_SLOTS = load_slots()
-
+# Priority-ordered list of desired time slots
+PRIORITY_SLOTS = [
+    "13:00 - 14:00",  # Priority 3 (9 PM)
+    # "22:00 - 23:00",  # Priority 4 (10 PM)
+]
 
 RETRIES = 40
 
@@ -37,9 +31,12 @@ def run_search(page, date_str):
     page.locator("button#u6510_btnTreeBorough").click()
     page.wait_for_timeout(500)
 
+    # ✅ Only select Saint-Leonard if not already checked
     saint_leonard_checkbox = page.locator("input#u2000_chkValue11")
     saint_leonard_checkbox.wait_for(state="visible")
-    saint_leonard_checkbox.click()
+    if not saint_leonard_checkbox.is_checked():
+        saint_leonard_checkbox.click()
+
     page.locator("button#u2000_btnTreeSelectConfirm").click()
 
     date_input = page.locator("input[name='reserveDate']")
@@ -47,44 +44,77 @@ def run_search(page, date_str):
     date_input.fill(date_str)
     page.wait_for_timeout(2000)
 
-def try_find_slot(page, priority_slots, skip_first_match=False):
-    print("[SCAN] Scanning for priority slots...")
-    page.wait_for_selector("div#searchResult")
+def try_find_slot(page, priority_slots, prefer_second=False):
+    """
+    prefer_second = False → Script A: select the FIRST occurrence immediately
+    prefer_second = True  → Script B: select the SECOND occurrence immediately
+                           (only if 2+ total matches exist across pages)
+    """
+    print("[SCAN] Scanning for priority slots (with pagination)...")
+    matched = 0  # number of matches found so far
 
-    headers = page.locator("div#searchResult thead tr th")
-    quand_index = None
-    for i in range(headers.count()):
-        header_text = headers.nth(i).inner_text().strip().lower()
-        if "quand" in header_text:
-            quand_index = i + 1
+    while True:  # loop through result pages
+        page.wait_for_selector("div#searchResult")
+
+        # find the 'Quand' column index
+        headers = page.locator("div#searchResult thead tr th")
+        quand_index = None
+        for i in range(headers.count()):
+            header_text = headers.nth(i).inner_text().strip().lower()
+            if "quand" in header_text:
+                quand_index = i + 1
+                break
+
+        if quand_index is None:
+            print("❌ 'Quand' column not found.")
+            return None
+
+        rows = page.locator("div#searchResult tbody tr")
+
+        # Loop through rows and slots
+        for priority, slot in enumerate(priority_slots, 1):
+            for i in range(rows.count()):
+                cell = rows.nth(i).locator(f"td:nth-child({quand_index})")
+                cell_text = cell.inner_text().strip()
+                if slot in cell_text:
+                    matched += 1
+                    print(f"🔍 Found match #{matched}: '{slot}' at row {i+1}")
+
+                    # Decide based on counter
+                    if not prefer_second and matched == 1:
+                        print(f"✅ [P{priority}] Script A booking FIRST occurrence '{slot}'")
+                        rows.nth(i).locator("button:has(i.fa-plus)").click()
+                        return slot
+
+                    if prefer_second and matched == 2:
+                        print(f"✅ [P{priority}] Script B booking SECOND occurrence '{slot}'")
+                        rows.nth(i).locator("button:has(i.fa-plus)").click()
+                        return slot
+
+        # --- pagination handling ---
+        next_li = page.locator("li.pagination-next")
+        if next_li.count() > 0:
+            li_class = next_li.first.get_attribute("class") or ""
+            if "disabled" in li_class:
+                print("⛔ Last page reached.")
+                break
+            else:
+                print("➡️ Moving to next page...")
+                next_li.locator("a.ng-binding", has_text=">").click()
+                page.wait_for_timeout(1500)
+                continue
+        else:
             break
 
-    if quand_index is None:
-        print("❌ 'Quand' column not found.")
-        return None
-
-    rows = page.locator("div#searchResult tbody tr")
-
-    for priority, slot in enumerate(priority_slots, 1):
-        # Find all rows for this slot
-        matching_rows = []
-        for i in range(rows.count()):
-            cell = rows.nth(i).locator(f"td:nth-child({quand_index})")
-            cell_text = cell.inner_text().strip()
-            if slot in cell_text:
-                matching_rows.append(i)
-
-        if matching_rows:
-            # Decide which match to pick:
-            index_to_use = 1 if skip_first_match and len(matching_rows) > 1 else 0
-            row_index = matching_rows[index_to_use]
-            print(f"✅ [P{priority}] Selected slot '{slot}' at row {row_index + 1}")
-            plus_button = rows.nth(row_index).locator("button:has(i.fa-plus)")
-            plus_button.click()
-            return slot
-
-    print("⛔ No priority slots found.")
+    # --- nothing booked ---
+    if prefer_second:
+        print("⛔ Fewer than 2 total matches found — Script B will skip.")
+    else:
+        print("⛔ No matches found — Script A will skip.")
     return None
+
+
+
 
 def select_user_and_confirm(page):
     print("[STEP] Selecting user...")
@@ -131,14 +161,14 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state="sylvia.json")
+        context = browser.new_context(storage_state="tommy.json")
         page = context.new_page()
 
         for attempt in range(RETRIES):
             print(f"[{attempt+1}/{RETRIES}] Checking for time slots on {date_str}...")
             run_search(page, date_str)
 
-            found_slot = try_find_slot(page, PRIORITY_SLOTS, skip_first_match=False)
+            found_slot = try_find_slot(page, PRIORITY_SLOTS)
             if found_slot:
                 print(f"🟢 Slot '{found_slot}' selected.")
                 page.wait_for_timeout(2000)

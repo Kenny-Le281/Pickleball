@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, date
 from playwright.sync_api import sync_playwright
 
 # The specific time slot we want to book
-TARGET_SLOT = "16:00 - 17:00"
+TARGET_SLOT = "24:00 - 25:00"
 
 # Number of retry attempts (with a 3-second delay between each),
 # approximately 2 minutes of retrying total
