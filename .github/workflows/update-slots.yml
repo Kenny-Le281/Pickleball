@@ -3,7 +3,7 @@ name: Update Slots
 on:
   schedule:
     - cron: "0 20 * * *"   # runs at 4:00 PM Montreal
-  workflow_dispatch:
+  workflow_dispatch:        # 👈 allows manual trigger
 
 jobs:
   update-slots:
@@ -15,6 +15,7 @@ jobs:
         with:
           python-version: "3.10"
 
+      # ✅ Cache pip dependencies
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -28,13 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 👇 write raw JSON secret directly to credentials.json
-      - name: Set up Google credentials
-        run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
-          echo "✅ credentials.json created"
-
+      # ✅ Pass Google credentials as environment variable
       - name: Run read_slots.py
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python read_slots.py
 
       - name: Commit updated slots.json
