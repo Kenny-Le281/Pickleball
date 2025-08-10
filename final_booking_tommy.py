@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 RETRIES = 60
 
 MTL = ZoneInfo("America/Toronto")
-GRACE_MIN = 30  # minutes after the hour to keep targeting the previous release window
+GRACE_MIN = 10  # minutes after the hour to keep targeting the previous release window
 
 def load_priority_slots():
     """
@@ -44,8 +44,8 @@ def get_target_slot(all_slots):
 
     # Grace‐window rules
     target = None
-    if hh == 10 or (hh == 11 and mm <= GRACE_MIN):
-        target = "13:00 - 14:00"
+    if hh == 17 or (hh == 18 and mm <= GRACE_MIN):
+        target = "20:00 - 21:00"
     elif hh == 19 or (hh == 20 and mm <= GRACE_MIN):
         target = "22:00 - 23:00"
 
