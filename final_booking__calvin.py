@@ -1,11 +1,14 @@
 import time
 import json
+import os
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 from zoneinfo import ZoneInfo
 
-
 RETRIES = 40
+
+MTL = ZoneInfo("America/Toronto")
+GRACE_MIN = 5  # minutes after the hour to keep targeting the previous release window
 
 def load_priority_slots():
     """
@@ -22,39 +25,41 @@ def load_priority_slots():
     except Exception as e:
         print(f"❌ Could not load slots.json: {e}")
         return []
-    
-def now_montreal():
-    return datetime.now(ZoneInfo("America/Toronto"))
+
+def now_mtl():
+    return datetime.now(MTL)
+
+def today_mtl():
+    return now_mtl().date()
 
 def get_target_slot(all_slots):
-    """
-    Decide which single slot to search for based on current hour.
-    If run just before the release (e.g., 17:59), bump to next hour.
-    """
-    now = now_montreal()
-    hour = now.hour
+    # Allow manual override from env (optional)
+    override = os.getenv("SLOT_TARGET")
+    if override and override in all_slots:
+        print(f"🎯 Using SLOT_TARGET override: {override} (for tomorrow)")
+        return [override]
 
-    # Grace period: if between :00 and :02, use the previous hour
-    if 0 <= now.minute <= 2:
-        hour -= 1
+    now = now_mtl()
+    hh, mm = now.hour, now.minute
 
-    mapping = {
-        9: "12:00 - 13:00",
-        #16: "19:00 - 20:00",  # run at 5pm → book 7–8pm slot
-        18: "21:00 - 22:00",  # run at 7pm → book 9–10pm slot
-    }
+    # Grace‐window rules
+    target = None
+    if hh == 16 or (hh == 17 and mm <= GRACE_MIN):
+        target = "19:00 - 20:00"
+    elif hh == 18 or (hh == 19 and mm <= GRACE_MIN):
+        target = "21:00 - 22:00"
 
-    target = mapping.get(hour)
     if target and target in all_slots:
-        print(f"🎯 Target slot for this run: {target}")
-        return [target]  # return as list so try_find_slot works
+        print(f"🎯 [{now.isoformat()}] Target slot for this run: {target} (for tomorrow)")
+        return [target]
     else:
-        print("❌ No valid target slot at this time.")
+        print(f"❌ [{now.isoformat()}] No valid target slot (hour={hh}, minute={mm}).")
         return []
 
 
 def get_tomorrows_date_str():
-    return (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    return (today_mtl() + timedelta(days=1)).strftime("%Y-%m-%d")
+
 
 def run_search(page, date_str):
     page.goto("https://loisirs.montreal.ca/IC3/#/U6510/search")
@@ -78,15 +83,14 @@ def run_search(page, date_str):
     date_input.fill(date_str)
     page.wait_for_timeout(2000)
 
-def try_find_slot(page, priority_slots, prefer_second=False):
+def try_find_slot(page, priority_slots, target_date, prefer_second=False):
     """
-    prefer_second = False → Script A: select the FIRST occurrence immediately
-    prefer_second = True  → Script B: select the SECOND occurrence immediately
+    Only consider rows that match BOTH the target time slot and the target_date (YYYY-MM-DD).
     """
     print("[SCAN] Scanning for priority slots (with pagination)...")
-    matched = 0  # number of matches found so far
+    matched = 0
 
-    while True:  # loop through result pages
+    while True:
         page.wait_for_selector("div#searchResult")
 
         # find the 'Quand' column index
@@ -109,11 +113,12 @@ def try_find_slot(page, priority_slots, prefer_second=False):
             for i in range(rows.count()):
                 cell = rows.nth(i).locator(f"td:nth-child({quand_index})")
                 cell_text = cell.inner_text().strip()
-                if slot in cell_text:
-                    matched += 1
-                    print(f"🔍 Found match #{matched}: '{slot}' at row {i+1}")
 
-                    # Decide based on counter
+                # ✅ Require BOTH the time slot and the target date
+                if slot in cell_text and target_date in cell_text:
+                    matched += 1
+                    print(f"🔍 Found match #{matched}: [{target_date}] '{slot}' at row {i+1}")
+
                     if not prefer_second and matched == 1:
                         print(f"✅ [P{priority}] Script A booking FIRST occurrence '{slot}'")
                         rows.nth(i).locator("button:has(i.fa-plus)").click()
@@ -124,26 +129,24 @@ def try_find_slot(page, priority_slots, prefer_second=False):
                         rows.nth(i).locator("button:has(i.fa-plus)").click()
                         return slot
 
-        # --- pagination handling ---
+        # pagination
         next_li = page.locator("li.pagination-next")
         if next_li.count() > 0:
             li_class = next_li.first.get_attribute("class") or ""
             if "disabled" in li_class:
                 print("⛔ Last page reached.")
                 break
-            else:
-                print("➡️ Moving to next page...")
-                next_li.locator("a.ng-binding", has_text=">").click()
-                page.wait_for_timeout(1500)
-                continue
+            print("➡️ Moving to next page...")
+            next_li.locator("a.ng-binding", has_text=">").click()
+            page.wait_for_timeout(1500)
+            continue
         else:
             break
 
-    # --- nothing booked ---
     if prefer_second:
-        print("⛔ Fewer than 2 total matches found — Script B will skip.")
+        print("⛔ Fewer than 2 total matches found for the target date — Script B will skip.")
     else:
-        print("⛔ No matches found — Script A will skip.")
+        print("⛔ No matches found for the target date — Script A will skip.")
     return None
 
 def select_user_and_confirm(page):
@@ -204,7 +207,7 @@ def main():
             print(f"[{attempt+1}/{RETRIES}] Checking for time slots on {date_str}...")
             run_search(page, date_str)
 
-            found_slot = try_find_slot(page, priority_slots, prefer_second=False)  # Script A → first match
+            found_slot = try_find_slot(page, priority_slots, date_str, prefer_second=False)  # Script A → first match
             if found_slot:
                 print(f"🟢 Slot '{found_slot}' selected.")
                 page.wait_for_timeout(2000)
