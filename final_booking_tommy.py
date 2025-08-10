@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 RETRIES = 40
 
 MTL = ZoneInfo("America/Toronto")
-GRACE_MIN = 5  # minutes after the hour to keep targeting the previous release window
+GRACE_MIN = 20  # minutes after the hour to keep targeting the previous release window
 
 def load_priority_slots():
     """
