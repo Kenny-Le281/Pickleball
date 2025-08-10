@@ -2,6 +2,8 @@ import time
 import json
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
+from zoneinfo import ZoneInfo
+
 
 RETRIES = 40
 
@@ -20,22 +22,26 @@ def load_priority_slots():
     except Exception as e:
         print(f"❌ Could not load slots.json: {e}")
         return []
+    
+def now_montreal():
+    return datetime.now(ZoneInfo("America/Toronto"))
 
 def get_target_slot(all_slots):
     """
     Decide which single slot to search for based on current hour.
     If run just before the release (e.g., 17:59), bump to next hour.
     """
-    now = datetime.now()
+    now = now_montreal()
     hour = now.hour
 
-    # If script runs in the last 2 minutes of the hour, bump to next hour
-    if now.minute >= 58:
-        hour += 1
+    # Grace period: if between :00 and :02, use the previous hour
+    if 0 <= now.minute <= 2:
+        hour -= 1
 
     mapping = {
-        17: "19:00 - 20:00",  # run at 5pm → book 7–8pm slot
-        19: "21:00 - 22:00",  # run at 7pm → book 9–10pm slot
+        9: "12:00 - 13:00",
+        #16: "19:00 - 20:00",  # run at 5pm → book 7–8pm slot
+        18: "21:00 - 22:00",  # run at 7pm → book 9–10pm slot
     }
 
     target = mapping.get(hour)
