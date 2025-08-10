@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 from zoneinfo import ZoneInfo
 
-RETRIES = 40
+RETRIES = 60
 
 MTL = ZoneInfo("America/Toronto")
-GRACE_MIN = 5  # minutes after the hour to keep targeting the previous release window
+GRACE_MIN = 10  # minutes after the hour to keep targeting the previous release window
 
 def load_priority_slots():
     """
@@ -199,7 +199,8 @@ def main():
     assert date_str != datetime.today().strftime("%Y-%m-%d"), "❌ ERROR: Today's date is selected. Only tomorrow is allowed."
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        headless_mode = os.getenv("HEADLESS", "true").lower() == "true"
+        browser = p.chromium.launch(headless=headless_mode)
         context = browser.new_context(storage_state="calvin.json")
         page = context.new_page()
 
@@ -207,7 +208,7 @@ def main():
             print(f"[{attempt+1}/{RETRIES}] Checking for time slots on {date_str}...")
             run_search(page, date_str)
 
-            found_slot = try_find_slot(page, priority_slots, date_str, prefer_second=False)  # Script A → first match
+            found_slot = try_find_slot(page, priority_slots, date_str, prefer_second=False)  # Script A → First match
             if found_slot:
                 print(f"🟢 Slot '{found_slot}' selected.")
                 page.wait_for_timeout(2000)
