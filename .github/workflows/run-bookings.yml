@@ -11,6 +11,7 @@ on:
 jobs:
   run-bookings:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
@@ -56,4 +57,8 @@ jobs:
         run: playwright install --with-deps chromium
 
       - name: Run booking script
-        run: python ${{ matrix.script }}
+        env:
+          HEADLESS: "true"
+          PYTHONUNBUFFERED: "1"
+          TZ: America/Toronto
+        run: python -u ${{ matrix.script }}
