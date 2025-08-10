@@ -44,9 +44,9 @@ def get_target_slot(all_slots):
 
     # Grace‐window rules
     target = None
-    if hh == 18 or (hh == 19 and mm <= GRACE_MIN):
+    if hh == 17 or (hh == 18 and mm <= GRACE_MIN):
         target = "20:00 - 21:00"
-    elif hh == 20 or (hh == 21 and mm <= GRACE_MIN):
+    elif hh == 19 or (hh == 20 and mm <= GRACE_MIN):
         target = "22:00 - 23:00"
 
     if target and target in all_slots:

@@ -46,7 +46,7 @@ def get_target_slot(all_slots):
     target = None
     if hh == 10 or (hh == 11 and mm <= GRACE_MIN):
         target = "13:00 - 14:00"
-    elif hh == 20 or (hh == 21 and mm <= GRACE_MIN):
+    elif hh == 19 or (hh == 20 and mm <= GRACE_MIN):
         target = "22:00 - 23:00"
 
     if target and target in all_slots:
