@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 from zoneinfo import ZoneInfo
 
-RETRIES = 60
+RETRIES = 40
 
 MTL = ZoneInfo("America/Toronto")
 GRACE_MIN = 10  # minutes after the hour to keep targeting the previous release window
@@ -44,7 +44,7 @@ def get_target_slot(all_slots):
 
     # Grace‐window rules
     target = None
-    if hh == 17 or (hh == 18 and mm <= GRACE_MIN):
+    if hh == 15 or (hh == 16 and mm <= GRACE_MIN):
         target = "20:00 - 21:00"
     elif hh == 19 or (hh == 20 and mm <= GRACE_MIN):
         target = "22:00 - 23:00"

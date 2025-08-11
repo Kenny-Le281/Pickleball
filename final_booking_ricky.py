@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 from zoneinfo import ZoneInfo
 
-RETRIES = 60
+RETRIES = 40
 
 MTL = ZoneInfo("America/Toronto")
 GRACE_MIN = 10  # minutes after the hour to keep targeting the previous release window
