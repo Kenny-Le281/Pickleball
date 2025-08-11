@@ -2,21 +2,65 @@ name: Run Bookings
 
 on:
   schedule:
-    - cron: "58 20 * * *"   # 4:59 PM Montreal
-    - cron: "58 21 * * *"   # 5:59 PM Montreal
-    - cron: "58 22 * * *"   # 6:59 PM Montreal
-    - cron: "58 23 * * *"   # 7:59 PM Montreal
+    # Run 5 minutes early (UTC), then align to :58 America/Toronto inside the job
+    - cron: "55 20 * * *"   # 4:55 PM Montreal -> wait -> 4:58 PM
+    - cron: "55 21 * * *"   # 5:55 PM Montreal -> wait -> 5:58 PM
+    - cron: "55 22 * * *"   # 6:55 PM Montreal -> wait -> 6:58 PM
+    - cron: "55 23 * * *"   # 7:55 PM Montreal -> wait -> 7:58 PM
   workflow_dispatch:         # 👈 manual trigger option
 
 jobs:
   run-bookings:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Prevent overlapping if GitHub delays a run
+    concurrency:
+      group: run-bookings-${{ github.ref }}
+      cancel-in-progress: false
+
     strategy:
       matrix:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
+
     steps:
       - uses: actions/checkout@v4
+
+      # ⏳ Wait until exactly :58 in America/Toronto for the current local hour
+      # If the runner starts late and it's already > target+5min, skip gracefully.
+      - name: Wait until HH:58 Montreal
+        env:
+          TARGET_MINUTE: "58"
+          TZ_LOCAL: "America/Toronto"
+          LATE_GRACE_SEC: "300"   # 5 minutes grace; adjust if you want
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+          import os, sys, time
+
+          tz = ZoneInfo(os.getenv("TZ_LOCAL", "America/Toronto"))
+          target_minute = int(os.getenv("TARGET_MINUTE", "58"))
+          grace = int(os.getenv("LATE_GRACE_SEC", "300"))
+
+          now = datetime.now(tz)
+          # Target is ":58 of the current local hour"
+          target = now.replace(minute=target_minute, second=0, microsecond=0)
+
+          # If we triggered a bit before :58, sleep until :58
+          if now < target:
+              seconds = int((target - now).total_seconds())
+              print(f"[wait] Now: {now}, target: {target} — sleeping {seconds}s to align.")
+              time.sleep(max(0, seconds))
+          else:
+              # If already past :58, decide whether to proceed or skip
+              late_by = (now - target).total_seconds()
+              if late_by <= grace:
+                  print(f"[wait] Late by {int(late_by)}s (<= {grace}s grace). Proceeding.")
+              else:
+                  print(f"[wait] Too late by {int(late_by)}s (> {grace}s). Skipping this run.")
+                  # Exit 0 so the workflow is marked successful but no scripts run
+                  sys.exit(0)
+          PY
 
       - uses: actions/setup-python@v5
         with:
