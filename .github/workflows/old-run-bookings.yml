@@ -1,4 +1,4 @@
-name: Run Bookings
+name: Old Run Bookings
 
 on:
   #schedule:
