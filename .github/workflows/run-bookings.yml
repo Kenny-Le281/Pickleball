@@ -2,23 +2,27 @@ name: Run Bookings
 
 on:
   schedule:
-    # --- SUMMER (EDT, UTC−4): 4:50/5:50/6:50/7:50 Montreal ---
-    - cron: "45 20 * * *"   # 4:50 PM Montreal (EDT)
-    - cron: "45 21 * * *"   # 5:50 PM Montreal (EDT)
-    - cron: "45 22 * * *"   # 6:50 PM Montreal (EDT)
-    - cron: "45 23 * * *"   # 7:50 PM Montreal (EDT)
+    - cron: "58 20 * * *"   # 4:58 PM Montreal (comment fixed)
+    - cron: "58 21 * * *"   # 5:58 PM Montreal
+    - cron: "58 22 * * *"   # 6:58 PM Montreal
+    - cron: "58 23 * * *"   # 7:58 PM Montreal
   workflow_dispatch:
 
 jobs:
   run-bookings:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # Prevent overlap if a previous run is still going
+    timeout-minutes: 20
+
+    # ✅ Per-matrix-script concurrency (and separate by event so manual tests don't nuke scheduled runs)
     concurrency:
-      group: run-bookings
-      cancel-in-progress: true
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ matrix.script }}
+      # Optional: let manual runs coexist even if you click "Run workflow" again
+      cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
     strategy:
+      fail-fast: false          # ✅ don't cancel the other 3 if one fails
+      # Optional: limit concurrent start if the runner queue is tight (remove if you want all 4 at once)
+      # max-parallel: 4
       matrix:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
 
@@ -29,7 +33,6 @@ jobs:
         with:
           python-version: "3.10"
 
-      # ✅ Cache pip dependencies
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -38,11 +41,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # 👀 Debug pip cache status
       - name: Show pip cache status
         run: du -sh ~/.cache/pip || echo "No pip cache restored"
 
-      # ✅ Cache Playwright browsers
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         with:
@@ -51,7 +52,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright
 
-      # 👀 Debug Playwright cache status
       - name: Show Playwright cache status
         run: du -sh ~/.cache/ms-playwright || echo "No Playwright cache restored"
 
@@ -62,55 +62,6 @@ jobs:
 
       - name: Install Playwright Browsers
         run: playwright install --with-deps chromium
-
-      # --- Guard & Gate ---
-      # Only proceed during 16–19 local hours to avoid DST mistakes
-      - name: Guard local booking window (America/Toronto)
-        env:
-          TZ: America/Toronto
-        run: |
-          export TZ=America/Toronto
-          h=$(date +%H)
-          case "$h" in
-            16|17|18|19) echo "Within booking window (local hour=$h)";;
-            *) echo "Outside booking window (local hour=$h). Exiting."; exit 78;;
-          esac
-
-      # Sleep until EXACT :59:00 local (America/Toronto), then continue immediately
-      - name: Gate until exact :59:00 local
-        env:
-          TZ: America/Toronto
-          TARGET_MINUTE: "59"
-          MAX_LATE_SECONDS: "90"   # fail gracefully if we woke up too late
-        run: |
-          set -euo pipefail
-          export TZ=America/Toronto
-
-          now_epoch=$(date +%s)
-          now_h=$(date +%H)
-
-          # target = today <this hour>:59:00 local
-          target_epoch=$(date -d "today ${now_h}:${TARGET_MINUTE}:00" +%s)
-
-          # if we're already past :59, target next hour's :59
-          if [ "$now_epoch" -gt "$target_epoch" ]; then
-            target_epoch=$(date -d "next hour ${TARGET_MINUTE}:00" +%s)
-          fi
-
-          sleep_s=$(( target_epoch - now_epoch ))
-          if [ "$sleep_s" -gt 0 ]; then
-            echo "Sleeping $sleep_s seconds until $(date -d "@$target_epoch") (${TZ})"
-            sleep "$sleep_s"
-          fi
-
-          # safety: if we missed the moment by too much, exit neutral
-          now_epoch=$(date +%s)
-          lag=$(( now_epoch - target_epoch ))
-          echo "Lag after wake: ${lag}s"
-          if [ "$lag" -gt "${MAX_LATE_SECONDS}" ]; then
-            echo "Too late (> ${MAX_LATE_SECONDS}s). Exiting without booking."
-            exit 78
-          fi
 
       - name: Run booking script
         env:
