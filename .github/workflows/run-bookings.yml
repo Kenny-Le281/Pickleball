@@ -62,10 +62,10 @@ jobs:
         run: playwright install --with-deps chromium
 
       # 🔒 Sleep until EXACT :59:00 local, then proceed
-      - name: Gate until exact :59:00 local (America/Toronto)
+      - name: Gate until exact :00:00 local (America/Toronto)
         env:
           TZ: America/Toronto
-          TARGET_MINUTE: "59"
+          TARGET_MINUTE: "00"
           MAX_LATE_SECONDS: "90"   # exit neutral if we woke too late
         run: |
           set -euo pipefail
