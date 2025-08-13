@@ -2,19 +2,26 @@ name: Run Bookings
 
 on:
   schedule:
-    - cron: "58 20 * * *"   # 4:59 PM Montreal
-    - cron: "58 21 * * *"   # 5:59 PM Montreal
-    - cron: "58 22 * * *"   # 6:59 PM Montreal
-    - cron: "58 23 * * *"   # 7:59 PM Montreal
-  workflow_dispatch:         # 👈 manual trigger option
+    # --- SUMMER (EDT, UTC−4): 4:50/5:50/6:50/7:50 Montreal ---
+    - cron: "45 20 * * *"   # 4:50 PM Montreal (EDT)
+    - cron: "45 21 * * *"   # 5:50 PM Montreal (EDT)
+    - cron: "45 22 * * *"   # 6:50 PM Montreal (EDT)
+    - cron: "45 23 * * *"   # 7:50 PM Montreal (EDT)
+  workflow_dispatch:
 
 jobs:
   run-bookings:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # Prevent overlap if a previous run is still going
+    concurrency:
+      group: run-bookings
+      cancel-in-progress: true
+
     strategy:
       matrix:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +62,55 @@ jobs:
 
       - name: Install Playwright Browsers
         run: playwright install --with-deps chromium
+
+      # --- Guard & Gate ---
+      # Only proceed during 16–19 local hours to avoid DST mistakes
+      - name: Guard local booking window (America/Toronto)
+        env:
+          TZ: America/Toronto
+        run: |
+          export TZ=America/Toronto
+          h=$(date +%H)
+          case "$h" in
+            16|17|18|19) echo "Within booking window (local hour=$h)";;
+            *) echo "Outside booking window (local hour=$h). Exiting."; exit 78;;
+          esac
+
+      # Sleep until EXACT :59:00 local (America/Toronto), then continue immediately
+      - name: Gate until exact :59:00 local
+        env:
+          TZ: America/Toronto
+          TARGET_MINUTE: "59"
+          MAX_LATE_SECONDS: "90"   # fail gracefully if we woke up too late
+        run: |
+          set -euo pipefail
+          export TZ=America/Toronto
+
+          now_epoch=$(date +%s)
+          now_h=$(date +%H)
+
+          # target = today <this hour>:59:00 local
+          target_epoch=$(date -d "today ${now_h}:${TARGET_MINUTE}:00" +%s)
+
+          # if we're already past :59, target next hour's :59
+          if [ "$now_epoch" -gt "$target_epoch" ]; then
+            target_epoch=$(date -d "next hour ${TARGET_MINUTE}:00" +%s)
+          fi
+
+          sleep_s=$(( target_epoch - now_epoch ))
+          if [ "$sleep_s" -gt 0 ]; then
+            echo "Sleeping $sleep_s seconds until $(date -d "@$target_epoch") (${TZ})"
+            sleep "$sleep_s"
+          fi
+
+          # safety: if we missed the moment by too much, exit neutral
+          now_epoch=$(date +%s)
+          lag=$(( now_epoch - target_epoch ))
+          echo "Lag after wake: ${lag}s"
+          if [ "$lag" -gt "${MAX_LATE_SECONDS}" ]; then
+            echo "Too late (> ${MAX_LATE_SECONDS}s). Exiting without booking."
+            exit 78
+          fi
 
       - name: Run booking script
         env:
