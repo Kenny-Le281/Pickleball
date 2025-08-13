@@ -65,7 +65,7 @@ jobs:
       - name: Gate until exact :00:00 local (America/Toronto)
         env:
           TZ: America/Toronto
-          TARGET_MINUTE: "00"
+          TARGET_MINUTE: "59"
           MAX_LATE_SECONDS: "90"   # exit neutral if we woke too late
         run: |
           set -euo pipefail
