@@ -2,27 +2,25 @@ name: Run Bookings
 
 on:
   schedule:
-    - cron: "58 20 * * *"   # 4:58 PM Montreal (comment fixed)
-    - cron: "58 21 * * *"   # 5:58 PM Montreal
-    - cron: "58 22 * * *"   # 6:58 PM Montreal
-    - cron: "58 23 * * *"   # 7:58 PM Montreal
+    # Fire ~14 min early (EDT). In winter (EST) bump each hour by +1 UTC.
+    - cron: "45 20 * * *"   # 4:45 PM Montreal (EDT)
+    - cron: "45 21 * * *"   # 5:45 PM Montreal (EDT)
+    - cron: "45 22 * * *"   # 6:45 PM Montreal (EDT)
+    - cron: "45 23 * * *"   # 7:45 PM Montreal (EDT)
   workflow_dispatch:
 
 jobs:
   run-bookings:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
-    # ✅ Per-matrix-script concurrency (and separate by event so manual tests don't nuke scheduled runs)
+    # Per-matrix-script concurrency; separate manual vs schedule
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ matrix.script }}
-      # Optional: let manual runs coexist even if you click "Run workflow" again
       cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
     strategy:
-      fail-fast: false          # ✅ don't cancel the other 3 if one fails
-      # Optional: limit concurrent start if the runner queue is tight (remove if you want all 4 at once)
-      # max-parallel: 4
+      fail-fast: false
       matrix:
         script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
 
@@ -62,6 +60,37 @@ jobs:
 
       - name: Install Playwright Browsers
         run: playwright install --with-deps chromium
+
+      # 🔒 Sleep until EXACT :59:00 local, then proceed
+      - name: Gate until exact :59:00 local (America/Toronto)
+        env:
+          TZ: America/Toronto
+          TARGET_MINUTE: "59"
+          MAX_LATE_SECONDS: "90"   # exit neutral if we woke too late
+        run: |
+          set -euo pipefail
+          export TZ=America/Toronto
+
+          now_epoch=$(date +%s)
+          now_h=$(date +%H)
+          target_epoch=$(date -d "today ${now_h}:${TARGET_MINUTE}:00" +%s)
+
+          # If already past :59 for this hour (e.g., trigger jitter), exit neutral
+          if [ "$now_epoch" -gt "$target_epoch" ]; then
+            echo "Already past :${TARGET_MINUTE} for local hour ${now_h}. Exiting."
+            exit 78
+          fi
+
+          sleep_s=$(( target_epoch - now_epoch ))
+          echo "Sleeping ${sleep_s}s until $(date -d "@$target_epoch") (${TZ})"
+          sleep "$sleep_s"
+
+          lag=$(( $(date +%s) - target_epoch ))
+          echo "Lag after wake: ${lag}s"
+          if [ "$lag" -gt "${MAX_LATE_SECONDS}" ]; then
+            echo "Too late (> ${MAX_LATE_SECONDS}s). Exiting without booking."
+            exit 78
+          fi
 
       - name: Run booking script
         env:
