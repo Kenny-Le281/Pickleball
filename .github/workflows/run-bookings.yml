@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking__calvin.py]
+        script: [final_booking_tommy.py, final_booking_sylvia.py, final_booking_ricky.py, final_booking_calvin.py]
 
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
         run: playwright install --with-deps chromium
 
       # 🔒 Sleep until EXACT :59:00 local, then proceed
-      - name: Gate until exact :00:00 local (America/Toronto)
+      - name: Gate until exact :59:00 local (America/Toronto)
         env:
           TZ: America/Toronto
           TARGET_MINUTE: "59"

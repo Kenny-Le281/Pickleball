@@ -150,16 +150,25 @@ def try_find_slot(page, priority_slots, target_date, prefer_second=False):
     return None
 
 def select_user_and_confirm(page):
+    page.set_default_timeout(30000)  # safety timeout for all waits
+
     print("[STEP] Selecting user...")
     select_button = page.locator("button#u3600_btnSelect0")
-    select_button.wait_for(state="visible", timeout=5000)
-    select_button.click()
+    # Click directly (Playwright auto-waits for visible, enabled, stable, not covered)
+    for attempt in range(2):  # retry once in case of detach
+        try:
+            select_button.click(timeout=10000)
+            break
+        except Exception as e:
+            if "detached" in str(e).lower() and attempt == 0:
+                select_button = page.locator("button#u3600_btnSelect0")
+                continue
+            raise
 
     print("[STEP] Confirming cart...")
     confirm_button = page.locator("button#u3600_btnCheckout0")
-    confirm_button.wait_for(state="visible", timeout=5000)
-    confirm_button.click()
-
+    confirm_button.click(timeout=10000)
+    
 def finalize_checkout(page):
     print("[STEP] Finalizing checkout...")
     complete_button = page.locator("button#u3600_btnCartShoppingCompleteStep")
