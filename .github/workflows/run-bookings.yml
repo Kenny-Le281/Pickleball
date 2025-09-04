@@ -1,12 +1,12 @@
 name: Run Bookings
 
 on:
-  schedule:
+  #schedule:
     # Fire ~14 min early (EDT). In winter (EST) bump each hour by +1 UTC.
-    - cron: "45 20 * * *"   # 4:45 PM Montreal (EDT)
-    - cron: "45 21 * * *"   # 5:45 PM Montreal (EDT)
-    - cron: "45 22 * * *"   # 6:45 PM Montreal (EDT)
-    - cron: "45 23 * * *"   # 7:45 PM Montreal (EDT)
+  #  - cron: "45 20 * * *"   # 4:45 PM Montreal (EDT)
+  #  - cron: "45 21 * * *"   # 5:45 PM Montreal (EDT)
+  #  - cron: "45 22 * * *"   # 6:45 PM Montreal (EDT)
+  #  - cron: "45 23 * * *"   # 7:45 PM Montreal (EDT)
   workflow_dispatch:
 
 jobs:
